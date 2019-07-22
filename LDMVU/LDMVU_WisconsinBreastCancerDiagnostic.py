@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
+import torchvision
 from sklearn.neighbors import NearestNeighbors
+import torch.nn.functional as F
 import numpy as np
 import time
 import random
@@ -260,15 +262,12 @@ def evaluate(test_loader, net, num_points, labels):
         images = images.reshape(-1, n)
         out = net(images.float(), False)
         none, predicted = torch.max(out.data, 1)
-        print(predicted)
         mal = max(predicted.numpy())
-        print(mal)
         for i in range(len(predicted)):
             if predicted[i] == mal:
                 predicted[i] = 1
             else:
                 predicted[i] = 0
-        print(predicted)
         total += len(labels)
         correct += (predicted == labels.long()).sum().item()
         print('%f,%f,%f,%f,%f,%f,%f,%f,%f' % ((100 * correct / total), num_lm, batch_size , lbda, k_start , k_lm,
@@ -276,7 +275,6 @@ def evaluate(test_loader, net, num_points, labels):
         out = out.detach().numpy()
         x += 1
         final_score = 100 * correct / total
-    print(x)
     return final_score
 
 
