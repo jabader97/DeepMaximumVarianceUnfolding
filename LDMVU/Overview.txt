@@ -1,0 +1,3 @@
+Landmark Deep Maximum Variance Unfolding (LDMVU):
+LDMVU is a variation of DMVU which increases efficiency by preserving the distances between each point and the nearest landmarks rather than the nearest neighbors. The information is processed in batches which all include all landmarks.
+First the landmarks are spread out with regular DMVU, then the other points are added between.
