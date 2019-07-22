@@ -21,10 +21,15 @@ K: Number of neighbors to define local neighborhoods to maintain
 squeeze: Coefficient for reducing a specific dimension in normalize(), default to 1 for no change.
 lr: Learning Rate
 """
-
+epoch = 20000
+train_batch_size = 400
+lbda = 10000
+weight_initial = .1
+k = 8
+lr = .01
+squeeze = 1
 """
 Hyper-Parameters for a decent accuracy:
-
 epoch = 20000
 train_batch_size = 400
 lbda = 10000

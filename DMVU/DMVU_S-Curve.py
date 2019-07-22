@@ -20,8 +20,11 @@ lbda: Lambda sparsity coefficient for loss
 squeeze: Coefficient for reducing a specific dimension in normalize(), default to 1 for no change.
 lr: Learning Rate
 """
-
-
+epoch = 20000
+train_batch_size = 400
+lbda = 10
+k = 20
+squeeze = 1
 """
 Hyper-parameters for decent accuracy:
 epoch = 20000
@@ -30,11 +33,7 @@ lbda = 10
 k = 20
 squeeze = 1
 """
-epoch = 20000
-train_batch_size = 400
-lbda = 10
-k = 20
-squeeze = 1
+
 
 
 def load_s_data(size):
