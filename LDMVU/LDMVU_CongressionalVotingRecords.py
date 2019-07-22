@@ -143,6 +143,7 @@ def load_data(size, num_lm):
     divisor = int(size / batch_size)
     batch_loader = np.zeros((divisor, batch_size + num_lm, n))
     batch_graph = np.zeros((divisor, batch_size + num_lm, batch_size + num_lm))
+    # create the full neighborhood graph for each batch
     for i in range(divisor):
         holder = data[batch_size * i: batch_size * (i + 1)]
         holder_graph = NearestNeighbors(n_neighbors=k_other).fit(land_marks).kneighbors_graph(holder).todense()
