@@ -1,3 +1,9 @@
+"""
+@Author: Bader, J, Nelson, D, Chai-Zhang, T
+Created: 19/7/19
+"""
+
+
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
@@ -9,23 +15,41 @@ import time
 start_time = time.time()
 torch.manual_seed(2)
 
+"""
+Hyper-Parameters:
+epoch: Number of Epochs for training
+train_batch_size: Size of the training data from Swiss Roll
+lbda: Lambda sparsity coefficient for loss
+K: Number of neighbors to define local neighborhoods to maintain
+squeeze: Coefficient for reducing a specific dimension in normalize(), default to 1 for no change.
+lr: Learning Rate
+"""
+
 epoch = 20000
 train_batch_size = 400
-lbda = 100000000
-k = 20
+lbda = 10000
+k = 8
 squeeze = 1
 lr = .01
 
 
 def load_swiss_data(size):
+    """
+    Loads points from the Swiss Roll distrabution and returns them in an array with an array of labels.
+
+    size: Number of points to request to be generated from the Swiss Roll Distrabution.
+    """
     x, t = sklearn.datasets.samples_generator.make_swiss_roll(size, random_state=0) # random_state=0
-    # x[0][0] = 0
-    # x[0][1] = 0
-    # x[0][2] = -7.8
     return x, t
 
 
 def normalize(data):
+    """
+    Normalizes data around the origin.
+
+    data: Array-like to be normalized
+    """
+
     m = np.size(data, 0)
     n = np.size(data, 1)
 
@@ -64,8 +88,16 @@ class Net(nn.Module):
         return x
 
 
-def train_swiss_dmvu(epoch, data, net, loss_func, opti, t):
-    data = data.view(data.size(0), -1)  # not strictly needed
+def train_swiss_dmvu(epoch, data, net, opti, t):
+    '''
+    Training the neural net and produces the final lower dimensional representation
+
+    epoch: number of Epochs for training
+    data: tensor dataset for processing
+    net: DMVU neural net
+    opti: Neural Net Optimizer
+    t: Labels for dataset
+    '''
     data_distances = pairwise_distances(data)
     data_distances_masked = data_distances * nbr_graph_tensor.float()
     for num in range(epoch):
@@ -80,8 +112,6 @@ def train_swiss_dmvu(epoch, data, net, loss_func, opti, t):
         nbr_distance = nbr_diff.norm()
 
         loss = nbr_distance + lbda * (1 / out[:, 0].var() + 1 / out[:, 1].var())  # lmbda*(1/output.var(dim=0)[0] + 1/output.var(dim=0)[1]) #lmbd
-
-
         opti.zero_grad()
         loss.backward()
         opti.step()
@@ -97,11 +127,12 @@ def train_swiss_dmvu(epoch, data, net, loss_func, opti, t):
             plt.title(name)
             print("--- %s seconds ---" % (time.time() - start_time))
             plt.show()
-            # plt.savefig(name, bbox_inches='tight')
-            # plt.clf()
+
 
 def pairwise_distances(x, y=None):
     '''
+    Calculates distances across each element to prevent sparsity across only a single dimension.
+
     Input: x is a Nxd matrix
            y is an optional Mxd matirx
     Output: dist is a NxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
@@ -118,8 +149,6 @@ def pairwise_distances(x, y=None):
 
     dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
     # Ensure diagonal is zero if x=y
-    # if y is None:
-    #     dist = dist - torch.diag(dist.diag)
     return torch.clamp(dist, 0.0, np.inf)
 
 
@@ -129,18 +158,14 @@ def run_swiss():
     data = normalize(data)
     nbrs = NearestNeighbors(n_neighbors=k, algorithm='auto').fit(data)
     nbr_graph = nbrs.kneighbors_graph(data).toarray()
-    # nbr_graph[20][290] = 1
-    # nbr_graph[290][20] = 1
     global nbr_graph_tensor
     nbr_graph_tensor = torch.tensor(nbr_graph)
     data = torch.from_numpy(data).float()
     net = Net()
-    # loss function
-    loss_func = nn.L1Loss()
     # optimizer
     opti = torch.optim.Adam(net.parameters(), weight_decay=1e-3, lr=lr)
     # train net
-    train_swiss_dmvu(epoch, data, net, loss_func, opti, t)
+    train_swiss_dmvu(epoch, data, net, opti, t)
 
 
 run_swiss()
