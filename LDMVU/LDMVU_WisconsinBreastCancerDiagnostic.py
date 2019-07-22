@@ -12,22 +12,22 @@ random.seed(2)
 # Hyper parameters
 m, n, divisor = 0, 0, 0  # will reset later, m = num samples, n = num dimensions, num_batches = num batches
 
-num_lm = 30  # num landmarks to choose
+num_lm = 46  # num landmarks to choose
 batch_size = 60  # size of each batch
 size = 560  # num batches
 linear_dim0 = 30  # total num samples
-linear_dim1 = 100  # hidden layer dimension in NN
-linear_dim2 = 8  # hidden layer dimension in NN
-lbda = 90000  # scaling term for variance in loss equation
+linear_dim1 = 90  # hidden layer dimension in NN
+linear_dim2 = 2  # hidden layer dimension in NN
+lbda = 10000  # scaling term for variance in loss equation
 epoch = 500  # number of times to train network
 squeeze = 2  # amount to squeeze the shape by
 set_random = False  # random choice of landmarks vs most connected points
 temp_subset = num_lm + (batch_size * 5)
 trainsize = 200
 
-k_start = 3  # how you find landmarks based off of number of nearest neighbors
-k_lm = 3  # number of landmarks each landmark has
-k_other = 5  # number of landmarks each regular points has
+k_start = 6  # how you find landmarks based off of number of nearest neighbors
+k_lm = 4  # number of landmarks each landmark has
+k_other = 9  # number of landmarks each regular points has
 
 
 def normalize(data):
