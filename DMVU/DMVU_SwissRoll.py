@@ -89,6 +89,15 @@ class Net(nn.Module):
 
 
 def train_swiss_dmvu(epoch, data, net, opti, t):
+    '''
+    Training the neural net and produces the final lower dimensional representation
+
+    epoch: number of Epochs for training
+    data: tensor dataset for processing
+    net: DMVU neural net
+    opti: Neural Net Optimizer
+    t: Labels for dataset
+    '''
     data_distances = pairwise_distances(data)
     data_distances_masked = data_distances * nbr_graph_tensor.float()
     for num in range(epoch):
