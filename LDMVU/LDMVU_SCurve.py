@@ -1,49 +1,54 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 import sklearn.datasets
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import random
 start_time = time.time()
 torch.manual_seed(2)
-import random
-from mpl_toolkits import mplot3d
 random.seed(2)
 
 
-# Hyper paramters
-m, n, divisor = 0, 0, 0  # will reset these later
+# Hyper parameters
+m, n, num_batches = 0, 0, 0  # will reset later, m = num samples, n = num dimensions, num_batches = num batches
 
-num_lm = 200
-batch_size = 500
-size = (batch_size * 4) + num_lm
-linear_dim1 = 10
-linear_dim2 = 2
-lbda = 10000  # 1000000
-epoch = 5000
-squeeze = 0.5
-set_random = False
+num_lm = 200  # num landmarks to choose
+batch_size = 500  # size of each batch
+batches = 4  # num batches
+size = (batch_size * batches) + num_lm  # total num samples
+linear_dim1 = 10  # hidden layer dimension in NN
+linear_dim2 = 2  # final dimension of NN
+lbda = 1000000  # scaling term for variance in loss equation
+epoch = 5000  # number of times to train network
+squeeze = 0.5  # amount to squeeze the shape by
+set_random = False  # random choice of landmarks vs most connected points
 k_start = 3  # how you find landmarks based off of number of nearest neighbors
 k_lm = 5  # number of landmarks each landmark has
 k_other = 5  # number of landmarks each regular points has
 
 
 class Net(nn.Module):
+    """
+    Neural Network to train the model. Includes two layers.
+    """
     def __init__(self):
         super(Net, self).__init__()
         self.f = nn.Linear(3, linear_dim1, bias=True)
         self.f2 = nn.Linear(linear_dim1, linear_dim2, bias=True)
 
     def encode(self, x):
-        m = nn.PReLU()
-        x = m(self.f(x))
+        model = nn.PReLU()
+        x = model(self.f(x))
         x = self.f2(x)
         return x
 
     def decode(self, x):
+        """
+        In progress:
+        To expand the representation back to the original representation (as done in auto-encoders).
+        """
         return x
 
     def forward(self, x, decode):
@@ -53,65 +58,76 @@ class Net(nn.Module):
         return x
 
 
-def shuffle(data, labels):
-    holder_trash = np.empty((size, 4))
-    holder_trash[:, :-1] = data[:, :]
-    holder_trash[:, -1] = labels
-    np.random.shuffle(holder_trash)
-    data = holder_trash[:, :-1]
-    labels = holder_trash[:, -1]
-    return data, labels
-
-
 def normalize(data):
+    """
+    Function to normalize the data
+    :param data: original data
+    :return: normalized data
+    """
     global squeeze, m, n
     for j in range(n):
+        # find the sum for each column
         col_sum = 0
         for i in range(m):
             col_sum += data[i][j]
+        # subtract the mean from each point in the column
         col_sum /= m
         for i in range(m):
             data[i][j] -= col_sum
-    initGraph = data.transpose()
-    initGraph[1] = initGraph[1] / squeeze
-    data = initGraph.transpose()
+    # squeeze the graph
+    init_graph = data.transpose()
+    init_graph[1] = init_graph[1] / squeeze
+    data = init_graph.transpose()
     return data
 
 
-# load data set, select land marks at random and remove from data set, return a train_loader
 def load_data(size, num_lm):
-    global divisor, m, n, batch_size, set_random
+    """
+    Function to load the data
+    :param size: total number of points to get
+    :param num_lm: number of points which will be landmarks
+    :return: the batch loader, landmark points, labels, batched data without landmark points,
+    data organized in graphs, neighborhood graph for the landmarks, original data, original labels,
+    neighborhood graphs for non-landmarks
+    """
+    global num_batches, m, n, batch_size, set_random
     # import data
     data, labels = sklearn.datasets.make_s_curve(size)
-    # data, labels = shuffle(data, labels)
     m = np.size(data, 0)
     n = np.size(data, 1)
     data = normalize(data)
-    saveLabels = labels
-    saveData = data
-    # make landmarks, select x random points in the data set
+    save_labels = labels
+    save_data = data
+
+    # make landmarks
     land_marks = np.empty((num_lm, n))
     top_landmarks_idxs = []
     if set_random:
+        # select x random points in the data set
         for i in range(num_lm):
             index = random.randint(0, m - i)
             land_marks[i] = data[index]
-            data = np.delete(data, index, axis=0)
+            data = np.delete(data, index, axis=0)  # remove landmarks from data
             labels = np.delete(labels, index, axis=0)
     else:
+        # pick the points with the most neighbors
         N = NearestNeighbors(n_neighbors=k_start).fit(data).kneighbors_graph(data).todense()
         N = np.array(N)
         num_connections = N.sum(axis=0).argsort()[::-1]
         top_landmarks_idxs = num_connections[:num_lm]
         land_marks = data[top_landmarks_idxs, :]
-        data = np.delete(data, top_landmarks_idxs, axis=0)
+        data = np.delete(data, top_landmarks_idxs, axis=0)  # remove landmarks from data
 
+    # find the nearest landmarks for the landmarks
     landmark_neighbors = NearestNeighbors(n_neighbors=k_lm).fit(land_marks).kneighbors_graph(land_marks).todense()
-    divisor = int(size / batch_size)
-    batch_loader = np.zeros((divisor, batch_size + num_lm, n))
-    batch_graph = np.zeros((divisor, batch_size + num_lm, batch_size + num_lm))
-    for i in range(divisor):
+    # break data into batches
+    num_batches = int(size / batch_size)
+    batch_loader = np.zeros((num_batches, batch_size + num_lm, n))
+    batch_graph = np.zeros((num_batches, batch_size + num_lm, batch_size + num_lm))
+    # create the full neighborhood graph for each batch
+    for i in range(num_batches):
         holder = data[batch_size * i: batch_size * (i + 1)]
+        # find the nearest landmarks for the rest of the points
         holder_graph = NearestNeighbors(n_neighbors=k_other).fit(land_marks).kneighbors_graph(holder).todense()
         for j in range(batch_size):  # copy over the holder graph
             for l in range(num_lm):
@@ -125,14 +141,23 @@ def load_data(size, num_lm):
                     batch_graph[i, l + batch_size, j + batch_size] = 1
         holder = np.concatenate((holder, land_marks))
         batch_loader[i] = holder
-    batch_size += num_lm
-    return batch_loader, land_marks, labels, data, batch_graph,top_landmarks_idxs, saveData, saveLabels, landmark_neighbors
+    batch_size += num_lm  # adjust the batch size
+    return batch_loader, land_marks, labels, data, batch_graph, top_landmarks_idxs, save_data, save_labels, landmark_neighbors
 
 
 def train_net(epoch, data, net, opti, batch_graph):
-    global divisor, batch_size
+    """
+    Method to train the full net
+    :param epoch: number of times to train
+    :param data: batched data
+    :param net: neural net object
+    :param opti: optimizer
+    :param batch_graph: nearest neighbors graphs
+    """
+    global num_batches, batch_size
     for num in range(epoch):
-        for batch_id in range(divisor):
+        for batch_id in range(num_batches):
+            # train each batch
             batch = torch.from_numpy(data[batch_id]).float()
             batch = batch.view(batch_size, -1)
             batch_distances = pairwise_distances(batch)
@@ -154,7 +179,16 @@ def train_net(epoch, data, net, opti, batch_graph):
 
 
 def train_lms(epoch, land_marks, net, opti, landmark_neighbors):
+    """
+    Method to train the landmarks
+    :param epoch: number of times to train
+    :param land_marks: landmark points
+    :param net: neural network to train
+    :param opti: optimizer
+    :param landmark_neighbors: neighborhood graph
+    """
     for num in range(epoch):
+        # train with the landmark points
         global lbda
         batch = torch.from_numpy(land_marks).float().view(num_lm, -1)
         batch_distances = pairwise_distances(batch)
@@ -172,49 +206,34 @@ def train_lms(epoch, land_marks, net, opti, landmark_neighbors):
         print('LM Epoch: %f, Loss: %.2f' % (num, loss.data.cpu().numpy()))
 
 
-def make_neighborhood(batch):
-    global n, batch_size
-    neighborhood = torch.zeros(batch_size, batch_size, dtype=torch.float)  # set the type
-    for i in range(batch_size - num_lm, batch_size):
-        for j in range(0, batch_size):
-            neighborhood[i][j] = 1.0
-            neighborhood[j][i] = 1.0
-    return neighborhood
-
-
-def pairwise_distances(x, y=None):
+def pairwise_distances(x):
     '''
+    TODO cite this
     Input: x is a Nxd matrix
            y is an optional Mxd matirx
     Output: dist is a NxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
             if y is not given then use 'y=x'.
     i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
     '''
-    x_norm = (x ** 2).sum(1).view(-1, 1) # square every element, sum, resize to list
-    if y is not None:
-        y_t = torch.transpose(y, 0, 1)
-        y_norm = (y ** 2).sum(1).view(1, -1)
-    else:
-        y_t = torch.transpose(x, 0, 1)
-        y_norm = x_norm.view(1, -1)
+    x_norm = (x ** 2).sum(1).view(-1, 1)  # square every element, sum, resize to list
+    y = torch.transpose(x, 0, 1)
+    y_norm = x_norm.view(1, -1)
 
-    dist = x_norm + y_norm - 2.0 * torch.mm(x, y_t)
-    # Ensure diagonal is zero if x=y
-    # if y is None:
-    #     dist = dist - torch.diag(dist.diag)
+    dist = x_norm + y_norm - 2.0 * torch.mm(x, y)
     return torch.clamp(dist, 0.0, np.inf)
 
 
 def evaluate(data, net, t, landmarks):
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
-    ax.scatter(data[:, 0], data[:, 1], data[:, 2], c=t)
-    ax.scatter(data[landmarks, 0], data[landmarks, 1], data[landmarks, 2], c='Red', marker='^', alpha=1, s=200)
-    plt.show()
-    # data = np.concatenate((data, landmarks), axis=0)
+    """
+    method to evaluate the accuracy of the already trained model
+    :param data:
+    :param net:
+    :param t:
+    :param landmarks:
+    """
     out = net(torch.from_numpy(data).float(), False)
-    # print(time.time() - start_time)
     out = out.detach().numpy()
+    #  Graph the data
     plt.scatter(out[:, 0], out[:, 1], c=t, marker='o')
     if not set_random:
         plt.scatter(out[landmarks, 0], out[landmarks, 1], c='Red', marker='+')
@@ -222,13 +241,20 @@ def evaluate(data, net, t, landmarks):
 
 
 def run():
+    """
+    Method to run LDMVU
+    """
     global num_lm
-    data_loader, land_marks, labels, data, batch_graph,lmIndex, saveData, saveLabels, landmark_neighbors = load_data(size, num_lm)
+    # load the data
+    data_loader, land_marks, labels, data, batch_graph, lm_index, save_data, save_labels, landmark_neighbors = load_data(size, num_lm)
     net = Net()
     opti = torch.optim.Adam(net.parameters(), weight_decay=1e-3)
+    # train the landmarks first to spread them out
     train_lms(epoch, land_marks, net, opti, landmark_neighbors)
+    # train the rest of the points to fit them around the landmarks
     train_net(epoch, data_loader, net, opti, batch_graph)
-    evaluate(saveData, net, saveLabels, lmIndex)
+    # evaluate the accuracy
+    evaluate(save_data, net, save_labels, lm_index)
 
 
 run()
